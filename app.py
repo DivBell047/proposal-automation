@@ -8,6 +8,7 @@ from enum import Enum
 from typing import List, Optional
 import io
 import os
+from groq import Groq
 
 # We import python-pptx inside the app. 
 # Make sure to run `pip install python-pptx` in Colab first.
@@ -29,8 +30,38 @@ TEMPLATE_MAP = {
     "Chatbot": "chatbot.pptx"
 }
 
+
+def call_llm_for_text(prompt: str) -> str:
+    """
+    Helper to call Groq API (using Mixtral).
+    """
+    api_key = st.secrets.get("GROQ_API_KEY")
+    
+    if not api_key:
+        return "AI_ERROR_NO_KEY"
+        
+    try:
+        client = Groq(api_key=api_key)
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a senior solution architect and proposal writer. You write concise, high-impact business prose."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500,
+        )
+        return completion.choices[0].message.content.strip()
+        
+    except Exception as e:
+        return f"[AI ERROR: {str(e)}]"
+    
+
 def generate_narrative_content(data: dict, proposal_type: str) -> dict:
-    """Acts as a 'Mock LLM' to generate readable sentences."""
+    """
+    Orchestrates content generation.
+    Mixes Deterministic Data (Budget, Dates) with AI Narrative (Summary).
+    """
     
     # 1. Common Formatting
     client = data.get("client_name", "Valued Client")
@@ -40,13 +71,51 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
     timeline = data.get("delivery_timeline", "").replace("_", " ").title()
     cloud = data.get("cloud_provider", "Cloud").upper()
     
+    # Helper to format lists for the prompt (e.g. methods)
+    tech_details = data.get('forecasting_methods') or data.get('inspection_type') or data.get('chatbot_type')
+    if isinstance(tech_details, list): tech_details = ", ".join(tech_details)
+
+    prompt = f"""
+    You are writing sections for a pitch deck. Output exactly two sections separated by "|||".
+    
+    SECTION 1: Executive Summary (3-4 sentences)
+    - Structure: Hook (The Challenge) -> Solution (The approach) -> Value (The Impact).
+    - Context: {client} in {industry} needs {data.get('use_case_description')}.
+    - We ({vendor}) propose a solution on {cloud} using {tech_details}.
+    - Commercials: {budget}, {timeline}.
+    - Tone: Strategic, persuasive.
+    
+    |||
+    
+    SECTION 2: Technical Rationale (2 sentences)
+    - Explain WHY the selected technical features/methods are the right choice for this specific use case.
+    - Context: We selected {tech_details} and features like {data.get('features_available') or data.get('defect_categories') or data.get('integration_platforms')}.
+    - Tone: Technical, authoritative.
+    """
+    
+    # 3. Call the AI
+    ai_response = call_llm_for_text(prompt)
+    
+    # 4. Parse Response
+    if "|||" in ai_response:
+        summary_text, tech_narrative = ai_response.split("|||")
+    else:
+        # Fallback if AI ignores instructions
+        summary_text = ai_response
+        tech_narrative = f"Our technical approach leverages {tech_details} to ensure robust performance and scalability."
+
+    # Clean up whitespace
+    summary_text = summary_text.strip()
+    tech_narrative = tech_narrative.strip()
+
     # 2. Executive Summary Rule (Personalized)
-    summary_text = (
-        f"{vendor} is pleased to present this {proposal_type} proposal exclusively for {client}. "
-        f"Designed specifically for the {industry} sector, our solution aims to address {data.get('use_case_description')} "
-        f"with a projected investment of {budget} over {timeline}. "
-        f"The system will be architected on {cloud} to ensure enterprise-grade scalability."
-    )
+    # summary_text = (
+    #     f"{vendor} is pleased to present this {proposal_type} proposal exclusively for {client}. "
+    #     f"Designed specifically for the {industry} sector, our solution aims to address {data.get('use_case_description')} "
+    #     f"with a projected investment of {budget} over {timeline}. "
+    #     f"The system will be architected on {cloud} to ensure enterprise-grade scalability."
+    # )
+    # ai_summary = call_llm_for_text(summary_prompt)
 
     # 3. Replacements
     replacements = {
@@ -69,22 +138,31 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
         replacements["{{HORIZON}}"] = f"{data.get('forecast_horizon_days')} Days"
         replacements["{{FREQUENCY}}"] = data.get("data_frequency", "").title()
         
-        feats = data.get("features_available", [])
-        feat_text = f"Key drivers: {', '.join(feats)}." if feats else "Historical data only."
-        replacements["{{FEATURES_NARRATIVE}}"] = feat_text
+        # feats = data.get("features_available", [])
+        # feat_text = f"Key drivers: {', '.join(feats)}." if feats else "Historical data only."
+        replacements["{{FEATURES_NARRATIVE}}"] = tech_narrative
 
     elif proposal_type == "Visual Inspection":
         replacements["{{INSPECTION_TYPE}}"] = data.get("inspection_type", "").replace('_', ' ').title()
         replacements["{{DEFECTS}}"] = ", ".join(data.get("defect_categories", []))
         replacements["{{ACCURACY}}"] = f"{data.get('accuracy_requirement', 0)*100:.1f}%"
-        replacements["{{IMAGE_SOURCE}}"] = data.get("image_source", "").replace('_', ' ').title()
+        # replacements["{{IMAGE_SOURCE}}"] = data.get("image_source", "").replace('_', ' ').title()
+        # We repurpose IMAGE_SOURCE to include the narrative if fitting, or just append it
+        # Ideally, we would update the template to have {{TECH_NARRATIVE}}, but for now:
+        replacements["{{IMAGE_SOURCE}}"] = f"{data.get('image_source', '').replace('_', ' ').title()}. {tech_narrative}"
+
 
     elif proposal_type == "Chatbot":
         replacements["{{CHATBOT_TYPE}}"] = data.get("chatbot_type", "").replace('_', ' ').title()
         replacements["{{PLATFORMS}}"] = ", ".join([p.title() for p in data.get("integration_platforms", [])])
         replacements["{{QUERIES}}"] = f"{data.get('expected_queries_per_day'):,} queries/day"
+        # langs = data.get("languages_required", [])
+        # replacements["{{LANGUAGES}}"] = ", ".join(langs) if langs else "English Only"
+        # Inject narrative into Languages or a new field if possible. 
+        # For now, let's append it to Languages to ensure it appears.
         langs = data.get("languages_required", [])
-        replacements["{{LANGUAGES}}"] = ", ".join(langs) if langs else "English Only"
+        lang_text = ", ".join(langs) if langs else "English Only"
+        replacements["{{LANGUAGES}}"] = f"{lang_text}.\n\n{tech_narrative}"
 
     return replacements
 
@@ -107,9 +185,13 @@ def create_presentation(data: dict, proposal_type: str) -> io.BytesIO:
         prs = Presentation(template_path)
     else:
         # Fallback if file missing
+        print(f"Template missing: {template_path}")
         prs = Presentation() 
         slide = prs.slides.add_slide(prs.slide_layouts[0])
         slide.shapes.title.text = f"MISSING TEMPLATE: {proposal_type}"
+        try:
+            slide.placeholders[1].text = "Please run the Template Factory cell to generate templates."
+        except: pass
 
     replacements = generate_narrative_content(data, proposal_type)
 
