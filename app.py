@@ -1,5 +1,5 @@
 # ============================================================================
-# PROPOSAL AUTOMATION SYSTEM - Phase 3 (Single File Version)
+# PROPOSAL AUTOMATION SYSTEM - Phase 4 (Universal Core & Deep Dive)
 # ============================================================================
 
 import streamlit as st
@@ -11,9 +11,9 @@ import os
 from groq import Groq
 
 # We import python-pptx inside the app. 
-# Make sure to run `pip install python-pptx` in Colab first.
 try:
     from pptx import Presentation
+    from pptx.util import Pt
 except ImportError:
     st.error("⚠️ Library 'python-pptx' not found. Please run `pip install python-pptx`.")
     class Presentation: pass
@@ -49,7 +49,7 @@ def call_llm_for_text(prompt: str) -> str:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=800,
         )
         return completion.choices[0].message.content.strip()
         
@@ -59,8 +59,7 @@ def call_llm_for_text(prompt: str) -> str:
 
 def generate_narrative_content(data: dict, proposal_type: str) -> dict:
     """
-    Orchestrates content generation.
-    Mixes Deterministic Data (Budget, Dates) with AI Narrative (Summary).
+    Orchestrates content generation using Universal Core data.
     """
     
     # 1. Common Formatting
@@ -69,28 +68,130 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
     industry = data.get("industry", "Business").title()
     budget = f"${data.get('estimated_budget_usd', 0):,}"
     timeline = data.get("delivery_timeline", "").replace("_", " ").title()
-    cloud = data.get("cloud_provider", "Cloud").upper()
     
-    # Helper to format lists for the prompt (e.g. methods)
-    tech_details = data.get('forecasting_methods') or data.get('inspection_type') or data.get('chatbot_type')
-    if isinstance(tech_details, list): tech_details = ", ".join(tech_details)
+    # Architecture Context
+    loc = data.get("inference_location", "Cloud")
+    provider = data.get("cloud_provider") or data.get("edge_hardware") or "Standard Infrastructure"
+    autonomy = data.get("system_autonomy", "Advisory")
+    
+    # Domain Details
+    tech_details = ""
+    if proposal_type == "Demand Forecasting":
+        tech_details = f"Methods: {', '.join(data.get('forecasting_methods', []))}. Level: {data.get('forecast_level')}."
+    elif proposal_type == "Visual Inspection":
+        tech_details = f"Type: {data.get('inspection_type')}. Defects: {', '.join(data.get('defect_categories', []))}."
+    elif proposal_type == "Chatbot":
+        tech_details = f"Type: {data.get('chatbot_type')}. Platforms: {', '.join(data.get('integration_platforms', []))}."
 
     prompt = f"""
-    You are writing sections for a pitch deck. Output exactly two sections separated by "|||".
-    
-    SECTION 1: Executive Summary (3-4 sentences)
-    - Structure: Hook (The Challenge) -> Solution (The approach) -> Value (The Impact).
-    - Context: {client} in {industry} needs {data.get('use_case_description')}.
-    - We ({vendor}) propose a solution on {cloud} using {tech_details}.
-    - Commercials: {budget}, {timeline}.
-    - Tone: Strategic, persuasive.
-    
+    You are generating content for a client-facing proposal deck.
+    You must stay strictly within the provided context.
+    Do not introduce new capabilities, assumptions, metrics, or technologies.
+
+    Output EXACTLY SIX sections separated by "|||".
+    Each section must be 3–4 sentences. No more, no less.
+
+    --------------------
+    CONTEXT (AUTHORITATIVE)
+    --------------------
+    - Client: {client} ({industry})
+    - Proposal Type: {proposal_type}
+
+    - Current Limitation:
+      The system supporting {data.get('decision_supported')} is constrained due to {data.get('failure_mode')}.
+
+    - Objective:
+      Deliver a {autonomy} {proposal_type} solution with {data.get('error_tolerance')} tolerance.
+
+    - Data Reality:
+      Source type: {data.get('data_source_type')}
+      Arrival pattern: {data.get('data_frequency')}
+      Data quality: {data.get('data_quality')}
+
+    - Intelligence Constraints:
+      System type: {autonomy}
+      Optimization priority: {data.get('optimization_goal')}
+      Retraining: {data.get('retraining_frequency')}
+
+    - Execution Constraints:
+      Deployment location: {loc}
+      Cloud provider: {provider}
+      Execution trigger: {data.get('execution_trigger')}
+      Failure handling: {data.get('failure_handling')}
+
+    - Commercial Context:
+      Budget: {budget}
+      Timeline: {timeline}
+
+    --------------------
+    SECTION 1: Executive Summary
+    --------------------
+    Write 3–4 sentences that:
+    - Clearly state the existing limitation ({data.get('failure_mode')})
+    - Propose the {autonomy} {proposal_type} system as a response
+    - Explain the value specifically in terms of {data.get('decision_supported')}
+    - Reference budget and timeline without guarantees
+
+    Tone: Strategic, concise, executive-level.
+    Do NOT use marketing buzzwords or absolute claims.
+
     |||
-    
-    SECTION 2: Technical Rationale (2 sentences)
-    - Explain WHY the selected technical features/methods are the right choice for this specific use case.
-    - Context: We selected {tech_details} and features like {data.get('features_available') or data.get('defect_categories') or data.get('integration_platforms')}.
-    - Tone: Technical, authoritative.
+
+    --------------------
+    SECTION 2: Technical Rationale
+    --------------------
+    Write 3–4 sentences that:
+    - Justify the deployment choice ({loc} on {provider}) based on data arrival ({data.get('data_frequency')})
+    - Explain why the chosen technical approach ({tech_details}) aligns with the stated data quality and optimization priority
+    - Emphasize feasibility and constraints over innovation
+
+    Tone: Technical, grounded, authoritative.
+    Do NOT speculate beyond the provided context.
+
+    |||
+
+    --------------------
+    SECTION 3: Problem Statement & Outcome
+    --------------------
+    Write 3–4 sentences that:
+    - Elaborate on the pain of {data.get('failure_mode')} in the {industry} context
+    - Define the operational gap in {data.get('decision_supported')}
+    - State the target outcome with {data.get('error_tolerance')} tolerance
+
+    Tone: Analytical, problem-focused.
+
+    |||
+
+    --------------------
+    SECTION 4: Data Reality
+    --------------------
+    Write 3–4 sentences that:
+    - Discuss handling {data.get('data_source_type')} data at {data.get('data_frequency')} scale
+    - Address the challenge of {data.get('data_quality')} quality and mitigation strategies
+
+    Tone: Realistic, data-driven.
+
+    |||
+
+    --------------------
+    SECTION 5: Intelligence Layer
+    --------------------
+    Write 3–4 sentences that:
+    - Justify the {autonomy} approach for {data.get('optimization_goal')}
+    - Explain how the model will adapt (Retraining: {data.get('retraining_frequency')})
+
+    Tone: Sophisticated, forward-looking.
+
+    |||
+
+    --------------------
+    SECTION 6: Execution Strategy
+    --------------------
+    Write 3–4 sentences that:
+    - Detail the deployment on {loc} ({provider})
+    - Explain the {data.get('execution_trigger')} workflow and {data.get('failure_handling')} protocol
+
+    Tone: Operational, reliable.
     """
     
     # 3. Call the AI
@@ -98,37 +199,39 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
     
     # 4. Parse Response
     if "|||" in ai_response:
-        summary_text, tech_narrative = ai_response.split("|||")
+        parts = ai_response.split("|||")
     else:
-        # Fallback if AI ignores instructions
-        summary_text = ai_response
-        tech_narrative = f"Our technical approach leverages {tech_details} to ensure robust performance and scalability."
+        parts = [ai_response]
 
-    # Clean up whitespace
-    summary_text = summary_text.strip()
-    tech_narrative = tech_narrative.strip()
+    # Ensure we have 6 parts, filling missing ones with placeholders
+    narratives = [p.strip() for p in parts]
+    while len(narratives) < 6:
+        narratives.append("Content generation failed for this section.")
 
-    # 2. Executive Summary Rule (Personalized)
-    # summary_text = (
-    #     f"{vendor} is pleased to present this {proposal_type} proposal exclusively for {client}. "
-    #     f"Designed specifically for the {industry} sector, our solution aims to address {data.get('use_case_description')} "
-    #     f"with a projected investment of {budget} over {timeline}. "
-    #     f"The system will be architected on {cloud} to ensure enterprise-grade scalability."
-    # )
-    # ai_summary = call_llm_for_text(summary_prompt)
+    summary_text = narratives[0]
+    tech_narrative = narratives[1]
+    problem_narrative = narratives[2]
+    data_narrative = narratives[3]
+    intel_narrative = narratives[4]
+    exec_narrative = narratives[5]
 
     # 3. Replacements
     replacements = {
         "{{CLIENT}}": client,
         "{{VENDOR}}": vendor,
         "{{INDUSTRY}}": industry,
-        "{{USE_CASE}}": data.get("use_case_description", ""),
+        "{{USE_CASE}}": data.get("decision_supported", "") + " optimization", # Fallback for old template tag
         "{{TIMELINE}}": timeline,
         "{{BUDGET}}": budget,
-        "{{CLOUD}}": cloud,
+        "{{CLOUD}}": f"{loc} ({provider})".upper(),
         "{{QUALITY}}": data.get("data_quality", "").title(),
         "{{ASSUMPTIONS}}": data.get("key_assumptions", "Standard commercial assumptions apply."),
         "{{EXECUTIVE_SUMMARY}}": summary_text, 
+        "{{TECH_NARRATIVE}}": tech_narrative,
+        "{{PROBLEM_NARRATIVE}}": problem_narrative,
+        "{{DATA_NARRATIVE}}": data_narrative,
+        "{{INTELLIGENCE_NARRATIVE}}": intel_narrative,
+        "{{EXECUTION_NARRATIVE}}": exec_narrative
     }
 
     # 4. Domain Specific Logic
@@ -137,29 +240,18 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
         replacements["{{METHODS}}"] = methods
         replacements["{{HORIZON}}"] = f"{data.get('forecast_horizon_days')} Days"
         replacements["{{FREQUENCY}}"] = data.get("data_frequency", "").title()
-        
-        # feats = data.get("features_available", [])
-        # feat_text = f"Key drivers: {', '.join(feats)}." if feats else "Historical data only."
         replacements["{{FEATURES_NARRATIVE}}"] = tech_narrative
 
     elif proposal_type == "Visual Inspection":
         replacements["{{INSPECTION_TYPE}}"] = data.get("inspection_type", "").replace('_', ' ').title()
         replacements["{{DEFECTS}}"] = ", ".join(data.get("defect_categories", []))
         replacements["{{ACCURACY}}"] = f"{data.get('accuracy_requirement', 0)*100:.1f}%"
-        # replacements["{{IMAGE_SOURCE}}"] = data.get("image_source", "").replace('_', ' ').title()
-        # We repurpose IMAGE_SOURCE to include the narrative if fitting, or just append it
-        # Ideally, we would update the template to have {{TECH_NARRATIVE}}, but for now:
         replacements["{{IMAGE_SOURCE}}"] = f"{data.get('image_source', '').replace('_', ' ').title()}. {tech_narrative}"
-
 
     elif proposal_type == "Chatbot":
         replacements["{{CHATBOT_TYPE}}"] = data.get("chatbot_type", "").replace('_', ' ').title()
         replacements["{{PLATFORMS}}"] = ", ".join([p.title() for p in data.get("integration_platforms", [])])
         replacements["{{QUERIES}}"] = f"{data.get('expected_queries_per_day'):,} queries/day"
-        # langs = data.get("languages_required", [])
-        # replacements["{{LANGUAGES}}"] = ", ".join(langs) if langs else "English Only"
-        # Inject narrative into Languages or a new field if possible. 
-        # For now, let's append it to Languages to ensure it appears.
         langs = data.get("languages_required", [])
         lang_text = ", ".join(langs) if langs else "English Only"
         replacements["{{LANGUAGES}}"] = f"{lang_text}.\n\n{tech_narrative}"
@@ -175,6 +267,10 @@ def replace_text_in_shape(shape, replacements):
             for key, value in replacements.items():
                 if key in run.text:
                     run.text = run.text.replace(key, str(value))
+                    if "Title" not in shape.name:
+                        try:
+                            run.font.size = Pt(24)
+                        except: pass
 
 def create_presentation(data: dict, proposal_type: str) -> io.BytesIO:
     """Loads a template, injects data, and returns the file in memory."""
@@ -184,14 +280,10 @@ def create_presentation(data: dict, proposal_type: str) -> io.BytesIO:
     if os.path.exists(template_path):
         prs = Presentation(template_path)
     else:
-        # Fallback if file missing
         print(f"Template missing: {template_path}")
         prs = Presentation() 
         slide = prs.slides.add_slide(prs.slide_layouts[0])
         slide.shapes.title.text = f"MISSING TEMPLATE: {proposal_type}"
-        try:
-            slide.placeholders[1].text = "Please run the Template Factory cell to generate templates."
-        except: pass
 
     replacements = generate_narrative_content(data, proposal_type)
 
@@ -220,6 +312,51 @@ class Industry(str, Enum):
     LOGISTICS = "logistics"
     OTHER = "other"
 
+class ErrorTolerance(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class DataSourceType(str, Enum):
+    DATABASE = "database"
+    API = "api"
+    FILES = "files"
+    IMAGES = "images"
+    VIDEO = "video"
+    MIXED = "mixed"
+
+class SystemAutonomy(str, Enum):
+    ADVISORY = "advisory"
+    AUTONOMOUS = "autonomous"
+
+class OptimizationGoal(str, Enum):
+    ACCURACY = "accuracy"
+    LATENCY = "latency"
+    EXPLAINABILITY = "explainability"
+
+class InferenceLocation(str, Enum):
+    CLOUD = "cloud"
+    EDGE = "edge"
+    HYBRID = "hybrid"
+
+class CloudProvider(str, Enum):
+    AWS = "aws"
+    AZURE = "azure"
+    GCP = "gcp"
+    OTHER = "other"
+
+class EdgeHardware(str, Enum):
+    NVIDIA_JETSON = "nvidia_jetson"
+    RASPBERRY_PI = "raspberry_pi"
+    MOBILE_DEVICE = "mobile_device"
+    INDUSTRIAL_PC = "industrial_pc"
+    OTHER = "other"
+
+class ExecutionTrigger(str, Enum):
+    SCHEDULED = "scheduled"
+    EVENT_BASED = "event_based"
+    USER_ACTION = "user_action"
+
 class ForecastingMethod(str, Enum):
     TIME_SERIES = "time_series"
     REGRESSION = "regression"
@@ -227,22 +364,15 @@ class ForecastingMethod(str, Enum):
     DEEP_LEARNING = "deep_learning"
 
 class DataFrequency(str, Enum):
-    DAILY = "daily"
-    WEEKLY = "weekly"
-    MONTHLY = "monthly"
-    QUARTERLY = "quarterly"
+    REAL_TIME = "real_time"
+    BATCH_DAILY = "batch_daily"
+    BATCH_WEEKLY = "batch_weekly"
+    BATCH_MONTHLY = "batch_monthly"
 
 class DataQuality(str, Enum):
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-    UNKNOWN = "unknown"
-
-class CloudProvider(str, Enum):
-    AWS = "aws"
-    AZURE = "azure"
-    GCP = "gcp"
-    ON_PREMISE = "on_premise"
+    CLEAN = "clean"
+    USABLE_WITH_GAPS = "usable_with_gaps"
+    NOISY = "noisy"
 
 class DeliveryTimeline(str, Enum):
     WEEKS_4 = "4_weeks"
@@ -279,61 +409,81 @@ class IntegrationPlatform(str, Enum):
 # 3. PYDANTIC MODELS
 # ============================================================================
 
-class DemandForecastingProposal(BaseModel):
-    client_name: str = Field(..., min_length=2)
-    vendor_name: str = Field(..., min_length=2)
-    industry: Industry
-    use_case_description: str = Field(..., min_length=10, max_length=500)
-    forecasting_methods: List[ForecastingMethod] = Field(..., min_items=1)
-    forecast_horizon_days: int = Field(default=30, ge=1, le=365)
+class UniversalProposalCore(BaseModel):
+    # 1. Problem & Outcome
+    decision_supported: str = Field(..., min_length=5)
+    failure_mode: str = Field(..., min_length=5)
+    error_tolerance: ErrorTolerance
+    
+    # 2. Data Reality
+    data_source_type: DataSourceType
     data_frequency: DataFrequency
-    historical_data_years: int = Field(default=2, ge=1, le=10)
     data_quality: DataQuality
+    
+    # 3. Intelligence Layer
+    system_autonomy: SystemAutonomy
+    optimization_goal: OptimizationGoal
+    retraining_frequency: str = Field(default="Monthly")
+    
+    # 4. Execution
+    inference_location: InferenceLocation
+    cloud_provider: Optional[CloudProvider] = None
+    edge_hardware: Optional[EdgeHardware] = None
+    execution_trigger: ExecutionTrigger
+    failure_handling: str = Field(default="Human Review")
+
+    # Common Commercials
+    client_name: str = Field(..., min_length=2)
+    vendor_name: str = Field(..., min_length=2)
+    industry: Industry
+    # use_case_description: str = Field(..., min_length=10) # Removed in favor of decision_supported
+    delivery_timeline: DeliveryTimeline
+    estimated_budget_usd: int = Field(default=50000)
+    key_assumptions: Optional[str] = Field(default="")
+
+    class Config: use_enum_values = True
+
+class DemandForecastingProposal(UniversalProposalCore):
+    # Domain Specifics
+    forecasting_methods: List[ForecastingMethod]
+    forecast_horizon_days: int = Field(default=30)
+    historical_data_years: int = Field(default=2)
     features_available: List[str] = Field(default_factory=list)
-    cloud_provider: CloudProvider
-    requires_real_time: bool = Field(default=False)
-    delivery_timeline: DeliveryTimeline
-    estimated_budget_usd: int = Field(default=50000, ge=10000)
-    key_assumptions: Optional[str] = Field(default="", max_length=1000)
-    class Config: use_enum_values = True
+    
+    # New Deep Dive Fields
+    forecast_level: str = Field(default="SKU Level")
+    demand_volatility: str = Field(default="Stable")
+    planning_decision: str = Field(default="Inventory Replenishment")
 
-class VisualInspectionProposal(BaseModel):
-    client_name: str = Field(..., min_length=2)
-    vendor_name: str = Field(..., min_length=2)
-    industry: Industry
-    use_case_description: str = Field(..., min_length=10, max_length=500)
+class VisualInspectionProposal(UniversalProposalCore):
+    # Domain Specifics
     inspection_type: InspectionType
-    defect_categories: List[str] = Field(..., min_items=1)
-    accuracy_requirement: float = Field(default=0.95, ge=0.80, le=0.99)
+    defect_categories: List[str]
+    accuracy_requirement: float = Field(default=0.95)
     image_source: ImageSource
-    existing_images_count: int = Field(default=0, ge=0)
-    data_quality: DataQuality
+    existing_images_count: int = Field(default=0)
     requires_labeling: bool = Field(default=True)
-    cloud_provider: CloudProvider
-    edge_deployment_required: bool = Field(default=False)
-    delivery_timeline: DeliveryTimeline
-    estimated_budget_usd: int = Field(default=60000, ge=15000)
-    key_assumptions: Optional[str] = Field(default="", max_length=1000)
-    class Config: use_enum_values = True
+    
+    # New Deep Dive Fields
+    inspection_points: str = Field(default="Single View")
+    cost_matrix: str = Field(default="Missed Defect is worse")
+    existing_dataset_size: Optional[int] = Field(default=None)
 
-class ChatbotProposal(BaseModel):
-    client_name: str = Field(..., min_length=2)
-    vendor_name: str = Field(..., min_length=2)
-    industry: Industry
-    use_case_description: str = Field(..., min_length=10, max_length=500)
+class ChatbotProposal(UniversalProposalCore):
+    # Domain Specifics
     chatbot_type: ChatbotType
-    integration_platforms: List[IntegrationPlatform] = Field(..., min_items=1)
-    expected_queries_per_day: int = Field(default=100, ge=10)
+    integration_platforms: List[IntegrationPlatform]
+    expected_queries_per_day: int = Field(default=100)
     requires_multilingual: bool = Field(default=False)
     languages_required: List[str] = Field(default_factory=list)
     existing_knowledge_base: bool = Field(default=False)
     knowledge_sources: List[str] = Field(default_factory=list)
-    cloud_provider: CloudProvider
     requires_human_handoff: bool = Field(default=True)
-    delivery_timeline: DeliveryTimeline
-    estimated_budget_usd: int = Field(default=40000, ge=10000)
-    key_assumptions: Optional[str] = Field(default="", max_length=1000)
-    class Config: use_enum_values = True
+    
+    # New Deep Dive Fields
+    response_type: str = Field(default="Generated")
+    document_formats: Optional[List[str]] = Field(default=None)
+    traceability_required: bool = Field(default=True)
 
 # ============================================================================
 # 4. HELPER FUNCTIONS
@@ -343,9 +493,24 @@ def format_enum_options(enum_cls):
     """Returns list of values for streamlit selectboxes"""
     return [e.value for e in enum_cls]
 
+def dropdown_with_other(label, options, key_prefix):
+    """
+    Renders a selectbox with an 'other' option.
+    Returns the selected value or the custom input.
+    """
+    options_with_other = options + ["other"]
+    selected = st.selectbox(label, options_with_other, key=f"{key_prefix}_select")
+    
+    if selected == "other":
+        custom_val = st.text_input(f"Specify {label}", key=f"{key_prefix}_custom")
+        return custom_val if custom_val else "other"
+    return selected
+
 def handle_submission(model_class, data, type_label):
     try:
-        validated_proposal = model_class(**data)
+        # Filter out None values to let Pydantic defaults handle them if needed
+        clean_data = {k: v for k, v in data.items() if v is not None}
+        validated_proposal = model_class(**clean_data)
         st.success(f"✅ {type_label} Config Validated!")
         with st.expander("View Raw Configuration Data"):
             st.json(validated_proposal.dict())
@@ -369,132 +534,213 @@ def handle_submission(model_class, data, type_label):
 # 5. STREAMLIT UI
 # ============================================================================
 
-st.set_page_config(page_title="Proposal Automation", page_icon="🚀", layout="centered")
+st.set_page_config(page_title="Proposal Automation", page_icon="🚀", layout="wide")
 st.title("🚀 Proposal Automation System")
 st.sidebar.header("Global Settings")
 
 with st.container():
-    # New Client/Vendor inputs
     c_global1, c_global2 = st.columns(2)
     with c_global1:
         global_client = st.text_input("Client Name *", "Acme Corp", key="global_client")
     with c_global2:
         global_vendor = st.text_input("Vendor Name *", "My AI Agency", key="global_vendor")
+    
+    global_industry = st.selectbox("Industry *", format_enum_options(Industry), key="global_industry")
 
-    c_global3, c_global4 = st.columns(2)
-    with c_global3:
-        global_industry = st.selectbox("Industry *", format_enum_options(Industry), key="global_industry")
-    with c_global4:
-        global_use_case = st.text_area("Use Case Description *", height=68, help="Min 10 chars", key="global_use_case")
+def render_universal_core(key_prefix):
+    """Renders the 12 Universal Core questions"""
+    st.markdown("### 1️⃣ Problem & Outcome")
+    c1, c2, c3 = st.columns(3)
+    with c1: decision = st.text_input("Decision to Support *", "Inventory Replenishment", key=f"{key_prefix}_decision", help="What operational decision will this system support?")
+    with c2: failure = st.text_input("Current Failure Mode *", "High Variance", key=f"{key_prefix}_failure", help="Why is the current process failing?")
+    with c3: tolerance = st.selectbox("Error Tolerance *", format_enum_options(ErrorTolerance), key=f"{key_prefix}_tolerance")
+
+    st.markdown("### 2️⃣ Data Reality")
+    c1, c2, c3 = st.columns(3)
+    with c1: dtype = st.selectbox("Data Source Type *", format_enum_options(DataSourceType), key=f"{key_prefix}_dtype")
+    with c2: freq = st.selectbox("Data Frequency *", format_enum_options(DataFrequency), key=f"{key_prefix}_freq")
+    with c3: quality = st.selectbox("Data Quality *", format_enum_options(DataQuality), key=f"{key_prefix}_quality")
+
+    st.markdown("### 3️⃣ Intelligence Layer")
+    c1, c2, c3 = st.columns(3)
+    with c1: autonomy = st.selectbox("System Autonomy *", format_enum_options(SystemAutonomy), key=f"{key_prefix}_autonomy")
+    with c2: goal = st.selectbox("Optimization Goal *", format_enum_options(OptimizationGoal), key=f"{key_prefix}_goal")
+    with c3: retrain = st.text_input("Retraining Freq", "Monthly", key=f"{key_prefix}_retrain")
+
+    st.markdown("### 4️⃣ Execution & Deployment")
+    c1, c2, c3 = st.columns(3)
+    with c1: 
+        loc = st.selectbox("Inference Location *", format_enum_options(InferenceLocation), key=f"{key_prefix}_loc")
+        # Conditional Logic for Cloud/Edge
+        cloud_prov = None
+        edge_hw = None
+        if loc in [InferenceLocation.CLOUD.value, InferenceLocation.HYBRID.value]:
+            cloud_prov = st.selectbox("Cloud Provider", format_enum_options(CloudProvider), key=f"{key_prefix}_cp")
+        if loc in [InferenceLocation.EDGE.value, InferenceLocation.HYBRID.value]:
+            edge_hw = st.selectbox("Edge Hardware", format_enum_options(EdgeHardware), key=f"{key_prefix}_hw")
+            
+    with c2: trigger = st.selectbox("Execution Trigger *", format_enum_options(ExecutionTrigger), key=f"{key_prefix}_trigger")
+    with c3: fail_handle = st.text_input("Failure Handling", "Human Review", key=f"{key_prefix}_fail")
+
+    return {
+        "decision_supported": decision, "failure_mode": failure, "error_tolerance": tolerance,
+        "data_source_type": dtype, "data_frequency": freq, "data_quality": quality,
+        "system_autonomy": autonomy, "optimization_goal": goal, "retraining_frequency": retrain,
+        "inference_location": loc, "cloud_provider": cloud_prov, "edge_hardware": edge_hw,
+        "execution_trigger": trigger, "failure_handling": fail_handle
+    }
 
 tab_demand, tab_visual, tab_chat = st.tabs(["Demand Forecasting", "Visual Inspection", "Chatbot"])
 
-# === TAB 1 ===
+# === TAB 1: DEMAND FORECASTING ===
 with tab_demand:
     st.header("Demand Forecasting Config")
     with st.form("form_demand"):
-        st.subheader("Scope & Methods")
-        methods = st.multiselect("Forecasting Methods *", format_enum_options(ForecastingMethod))
-        horizon = st.number_input("Forecast Horizon (Days)", 1, 365, 30)
-        st.subheader("Data Availability")
-        c1, c2 = st.columns(2)
-        with c1: freq = st.selectbox("Data Frequency *", format_enum_options(DataFrequency))
-        with c2: years = st.number_input("Historical Data (Years)", 1, 10, 2)
-        quality = st.selectbox("Data Quality *", format_enum_options(DataQuality), key="dq_demand")
-        st.markdown("**Available Features**")
-        feature_opts = ['price', 'promotions', 'seasonality', 'weather', 'holidays']
-        features_selected = []
-        c1, c2, c3 = st.columns(3)
-        for i, f in enumerate(feature_opts):
-            if [c1, c2, c3][i % 3].checkbox(f.title(), key=f"df_feat_{f}"): features_selected.append(f)
-        st.subheader("Technical & Commercials")
-        cloud = st.selectbox("Cloud Provider *", format_enum_options(CloudProvider), key="cp_demand")
-        real_time = st.checkbox("Requires Real-time Predictions")
-        timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_demand")
-        budget = st.number_input("Budget (USD)", 10000, 1000000, 50000, step=5000, key="b_demand")
-        assumptions = st.text_area("Key Assumptions", key="asm_demand")
+        with st.expander("Strategic & Technical Core", expanded=True):
+            core_data = render_universal_core("demand")
+        
+        with st.expander("Domain Details", expanded=True):
+            st.subheader("Forecasting Specifics")
+            methods = st.multiselect("Forecasting Methods *", format_enum_options(ForecastingMethod))
+            c1, c2 = st.columns(2)
+            with c1: horizon = st.number_input("Forecast Horizon (Days)", 1, 365, 30)
+            with c2: history = st.number_input("Historical Data (Years)", 1, 10, 2)
+            
+            st.subheader("Deep Dive")
+            c1, c2, c3 = st.columns(3)
+            with c1: level = st.text_input("Forecast Level", "SKU-Location")
+            with c2: vol = st.text_input("Demand Volatility", "Seasonal")
+            with c3: plan = st.text_input("Planning Decision", "Procurement")
+            
+            st.markdown("**Available Features**")
+            feature_opts = ['price', 'promotions', 'seasonality', 'weather', 'holidays']
+            features_selected = []
+            cols = st.columns(5)
+            for i, f in enumerate(feature_opts):
+                if cols[i].checkbox(f.title(), key=f"df_feat_{f}"): features_selected.append(f)
+
+        with st.expander("Commercials", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1: timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_demand")
+            with c2: budget = st.number_input("Budget (USD)", 10000, 1000000, 50000, step=5000, key="b_demand")
+            assumptions = st.text_area("Key Assumptions", key="asm_demand")
+
         submitted_demand = st.form_submit_button("Generate Demand Proposal", type="primary")
 
     if submitted_demand:
         data = {
-            "client_name": global_client, "vendor_name": global_vendor,
-            "industry": global_industry, "use_case_description": global_use_case,
+            **core_data,
+            "client_name": global_client, "vendor_name": global_vendor, "industry": global_industry,
             "forecasting_methods": methods, "forecast_horizon_days": horizon,
-            "data_frequency": freq, "historical_data_years": years,
-            "data_quality": quality, "features_available": features_selected,
-            "cloud_provider": cloud, "requires_real_time": real_time,
-            "delivery_timeline": timeline, "estimated_budget_usd": budget,
-            "key_assumptions": assumptions
+            "historical_data_years": history, "features_available": features_selected,
+            "forecast_level": level, "demand_volatility": vol, "planning_decision": plan,
+            "delivery_timeline": timeline, "estimated_budget_usd": budget, "key_assumptions": assumptions
         }
         handle_submission(DemandForecastingProposal, data, "Demand Forecasting")
 
-# === TAB 2 ===
+# === TAB 2: VISUAL INSPECTION ===
 with tab_visual:
     st.header("Visual Inspection Config")
     with st.form("form_visual"):
-        st.subheader("Scope & Methods")
-        insp_type = st.selectbox("Inspection Type *", format_enum_options(InspectionType))
-        defect_str = st.text_input("Defect Categories *", placeholder="scratches, dents")
-        accuracy = st.slider("Accuracy Requirement", 0.80, 0.99, 0.95)
-        st.subheader("Data Availability")
-        img_source = st.selectbox("Image Source *", format_enum_options(ImageSource))
-        img_count = st.number_input("Existing Images Count", 0, 100000, 0)
-        quality = st.selectbox("Data Quality *", format_enum_options(DataQuality), key="dq_visual")
-        labeling = st.checkbox("Requires Data Labeling", value=True)
-        st.subheader("Technical & Commercials")
-        cloud = st.selectbox("Cloud Provider *", format_enum_options(CloudProvider), key="cp_visual")
-        edge = st.checkbox("Edge Deployment Required")
-        timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_visual")
-        budget = st.number_input("Budget (USD)", 15000, 1000000, 60000, step=5000, key="b_visual")
-        assumptions = st.text_area("Key Assumptions", key="asm_visual")
+        with st.expander("Strategic & Technical Core", expanded=True):
+            core_data = render_universal_core("visual")
+            
+        with st.expander("Domain Details", expanded=True):
+            st.subheader("Inspection Scope")
+            insp_type = st.selectbox("Inspection Type *", format_enum_options(InspectionType))
+            defect_str = st.text_input("Defect Categories *", placeholder="scratches, dents")
+            accuracy = st.slider("Accuracy Requirement", 0.80, 0.99, 0.95)
+            
+            st.subheader("Deep Dive")
+            c1, c2 = st.columns(2)
+            with c1: 
+                img_src = st.selectbox("Image Source *", format_enum_options(ImageSource))
+                # Conditional Dataset Size
+                ds_size = None
+                if img_src == ImageSource.EXISTING_DATASET.value:
+                    ds_size = st.number_input("Dataset Size (Images)", 100, 1000000, 5000)
+            with c2: points = st.text_input("Inspection Points", "Single Camera")
+            
+            c3, c4 = st.columns(2)
+            with c3: cost_mx = st.text_input("Cost Matrix", "Missed defect > False Positive")
+            with c4: labeling = st.checkbox("Requires Data Labeling", value=True)
+
+        with st.expander("Commercials", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1: timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_visual")
+            with c2: budget = st.number_input("Budget (USD)", 15000, 1000000, 60000, step=5000, key="b_visual")
+            assumptions = st.text_area("Key Assumptions", key="asm_visual")
+
         submitted_visual = st.form_submit_button("Generate Visual Inspection Proposal", type="primary")
 
     if submitted_visual:
         defects_list = [x.strip() for x in defect_str.split(',')] if defect_str else []
         data = {
-            "client_name": global_client, "vendor_name": global_vendor,
-            "industry": global_industry, "use_case_description": global_use_case,
+            **core_data,
+            "client_name": global_client, "vendor_name": global_vendor, "industry": global_industry,
             "inspection_type": insp_type, "defect_categories": defects_list,
-            "accuracy_requirement": accuracy, "image_source": img_source,
-            "existing_images_count": img_count, "data_quality": quality,
-            "requires_labeling": labeling, "cloud_provider": cloud,
-            "edge_deployment_required": edge, "delivery_timeline": timeline,
-            "estimated_budget_usd": budget, "key_assumptions": assumptions
+            "accuracy_requirement": accuracy, "image_source": img_src,
+            "existing_dataset_size": ds_size, "inspection_points": points,
+            "cost_matrix": cost_mx, "requires_labeling": labeling,
+            "delivery_timeline": timeline, "estimated_budget_usd": budget, "key_assumptions": assumptions
         }
         handle_submission(VisualInspectionProposal, data, "Visual Inspection")
 
-# === TAB 3 ===
+# === TAB 3: CHATBOT ===
 with tab_chat:
     st.header("Chatbot Config")
     with st.form("form_chatbot"):
-        st.subheader("Scope & Methods")
-        cb_type = st.selectbox("Chatbot Type *", format_enum_options(ChatbotType))
-        platforms = st.multiselect("Integration Platforms *", format_enum_options(IntegrationPlatform))
-        queries = st.number_input("Expected Queries/Day", 10, 50000, 100)
-        multilingual = st.checkbox("Requires Multilingual Support")
-        lang_str = st.text_input("Languages", placeholder="Spanish, French")
-        st.subheader("Data Availability")
-        has_kb = st.checkbox("Existing Knowledge Base Available")
-        kb_str = st.text_input("Knowledge Sources", placeholder="PDFs, Website")
-        st.subheader("Technical & Commercials")
-        cloud = st.selectbox("Cloud Provider *", format_enum_options(CloudProvider), key="cp_chat")
-        handoff = st.checkbox("Requires Human Handoff", value=True)
-        timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_chat")
-        budget = st.number_input("Budget (USD)", 10000, 1000000, 40000, step=5000, key="b_chat")
-        assumptions = st.text_area("Key Assumptions", key="asm_chat")
+        with st.expander("Strategic & Technical Core", expanded=True):
+            core_data = render_universal_core("chat")
+            
+        with st.expander("Domain Details", expanded=True):
+            st.subheader("Bot Scope")
+            cb_type = st.selectbox("Chatbot Type *", format_enum_options(ChatbotType))
+            platforms = st.multiselect("Integration Platforms *", format_enum_options(IntegrationPlatform))
+            queries = st.number_input("Expected Queries/Day", 10, 50000, 100)
+            
+            st.subheader("Deep Dive")
+            c1, c2 = st.columns(2)
+            with c1: 
+                resp_type = st.selectbox("Response Type", ["Generated", "Deterministic", "Hybrid"])
+                has_kb = st.checkbox("Existing Knowledge Base?")
+                kb_src = st.text_input("Knowledge Sources", "PDFs, SharePoint") if has_kb else ""
+            with c2:
+                # Conditional Document Formats
+                doc_fmt = None
+                if has_kb:
+                    doc_fmt_str = st.text_input("Document Formats", "PDF, Docx")
+                    doc_fmt = [x.strip() for x in doc_fmt_str.split(',')] if doc_fmt_str else []
+                trace = st.checkbox("Traceability Required", value=True)
+            
+            c3, c4 = st.columns(2)
+            with c3: multilingual = st.checkbox("Multilingual Support")
+            with c4: handoff = st.checkbox("Human Handoff", value=True)
+            
+            lang_str = ""
+            if multilingual:
+                lang_str = st.text_input("Languages", "Spanish, French")
+
+        with st.expander("Commercials", expanded=False):
+            c1, c2 = st.columns(2)
+            with c1: timeline = st.selectbox("Timeline *", format_enum_options(DeliveryTimeline), key="dt_chat")
+            with c2: budget = st.number_input("Budget (USD)", 10000, 1000000, 40000, step=5000, key="b_chat")
+            assumptions = st.text_area("Key Assumptions", key="asm_chat")
+
         submitted_chat = st.form_submit_button("Generate Chatbot Proposal", type="primary")
 
     if submitted_chat:
         languages = [x.strip() for x in lang_str.split(',')] if (multilingual and lang_str) else []
-        kb_sources = [x.strip() for x in kb_str.split(',')] if (has_kb and kb_str) else []
+        kb_sources = [x.strip() for x in kb_src.split(',')] if (has_kb and kb_src) else []
         data = {
-            "client_name": global_client, "vendor_name": global_vendor,
-            "industry": global_industry, "use_case_description": global_use_case,
+            **core_data,
+            "client_name": global_client, "vendor_name": global_vendor, "industry": global_industry,
             "chatbot_type": cb_type, "integration_platforms": platforms,
-            "expected_queries_per_day": queries, "requires_multilingual": multilingual,
-            "languages_required": languages, "existing_knowledge_base": has_kb,
-            "knowledge_sources": kb_sources, "cloud_provider": cloud,
-            "requires_human_handoff": handoff, "delivery_timeline": timeline,
-            "estimated_budget_usd": budget, "key_assumptions": assumptions
+            "expected_queries_per_day": queries, "response_type": resp_type,
+            "existing_knowledge_base": has_kb, "knowledge_sources": kb_sources,
+            "document_formats": doc_fmt, "traceability_required": trace,
+            "requires_multilingual": multilingual, "languages_required": languages,
+            "requires_human_handoff": handoff,
+            "delivery_timeline": timeline, "estimated_budget_usd": budget, "key_assumptions": assumptions
         }
         handle_submission(ChatbotProposal, data, "Chatbot")

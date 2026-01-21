@@ -45,7 +45,28 @@ def create_base_template(filename, title_pattern, specific_placeholders):
     p = tf.add_paragraph()
     p.text = "Timeline: {{TIMELINE}}"
     p = tf.add_paragraph()
+    p = tf.add_paragraph()
     p.text = "Cloud: {{CLOUD}}"
+
+    # --- SLIDE 5: Problem & Outcome ---
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "Problem Statement & Outcome"
+    slide.placeholders[1].text = "{{PROBLEM_NARRATIVE}}"
+
+    # --- SLIDE 6: Data Reality ---
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "Data Reality"
+    slide.placeholders[1].text = "{{DATA_NARRATIVE}}"
+
+    # --- SLIDE 7: Intelligence Layer ---
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "Intelligence Layer"
+    slide.placeholders[1].text = "{{INTELLIGENCE_NARRATIVE}}"
+
+    # --- SLIDE 8: Execution & Deployment ---
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = "Execution Strategy"
+    slide.placeholders[1].text = "{{EXECUTION_NARRATIVE}}"
 
     save_path = os.path.join("templates", filename)
     prs.save(save_path)
