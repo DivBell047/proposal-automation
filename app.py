@@ -81,7 +81,17 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
     elif proposal_type == "Visual Inspection":
         tech_details = f"Type: {data.get('inspection_type')}. Defects: {', '.join(data.get('defect_categories', []))}."
     elif proposal_type == "Chatbot":
-        tech_details = f"Type: {data.get('chatbot_type')}. Platforms: {', '.join(data.get('integration_platforms', []))}."
+        # Extract Architecture Details
+        channel = data.get("channel_strategy", "Omnichannel").replace("_", " ").title()
+        auth = data.get("auth_method", "Standard").replace("_", " ").title()
+        orch = data.get("orchestration_type", "Single Model").replace("_", " ").title()
+        hosting = data.get("hosting_strategy", "SaaS").replace("_", " ").title()
+        knowledge = data.get("knowledge_strategy", "RAG").replace("_", " ").title()
+        
+        tech_details = (
+            f"Type: {data.get('chatbot_type')}. "
+            f"Architecture: {channel}, {auth} Auth, {orch}, {hosting}, {knowledge}."
+        )
 
     prompt = f"""
     You are generating content for a client-facing proposal deck.
@@ -256,6 +266,26 @@ def generate_narrative_content(data: dict, proposal_type: str) -> dict:
         lang_text = ", ".join(langs) if langs else "English Only"
         replacements["{{LANGUAGES}}"] = f"{lang_text}.\n\n{tech_narrative}"
 
+        # Architecture Placeholders
+        replacements["{{CHANNEL_STRATEGY}}"] = data.get("channel_strategy", "").replace('_', ' ').title()
+        replacements["{{AUTH_METHOD}}"] = data.get("auth_method", "").replace('_', ' ').title()
+        replacements["{{ORCHESTRATION}}"] = data.get("orchestration_type", "").replace('_', ' ').title()
+        
+        # Hosting + Detail
+        host_strat = data.get("hosting_strategy", "").replace('_', ' ').title()
+        if data.get("hosting_provider_detail"):
+            host_strat += f" ({data.get('hosting_provider_detail')})"
+        replacements["{{HOSTING_STRATEGY}}"] = host_strat
+
+        # Knowledge + Frequency
+        know_strat = data.get("knowledge_strategy", "").replace('_', ' ').title()
+        if data.get("knowledge_update_freq"):
+            know_strat += f" - {data.get('knowledge_update_freq')} Updates"
+        replacements["{{KNOWLEDGE_STRATEGY}}"] = know_strat
+
+        replacements["{{GUARDRAILS}}"] = data.get("guardrail_level", "").replace('_', ' ').title()
+        replacements["{{DEPLOYMENT_PHASE}}"] = data.get("deployment_phase", "").title()
+
     return replacements
 
 def replace_text_in_shape(shape, replacements):
@@ -405,6 +435,41 @@ class IntegrationPlatform(str, Enum):
     WHATSAPP = "whatsapp"
     MOBILE_APP = "mobile_app"
 
+class ChannelStrategy(str, Enum):
+    SINGLE = "single"
+    MULTI = "multi_channel"
+    OMNICHANNEL = "omnichannel"
+
+class AuthMethod(str, Enum):
+    PUBLIC = "public_anonymous"
+    INTERNAL_SSO = "internal_sso_iam"
+    OAUTH = "customer_oauth"
+    HYBRID = "hybrid"
+
+class OrchestrationType(str, Enum):
+    SINGLE_MODEL = "single_model"
+    RAG_PIPELINE = "rag_pipeline"
+    AGENTIC = "agentic_workflow"
+    MULTI_AGENT = "multi_agent_swarm"
+
+class HostingStrategy(str, Enum):
+    MANAGED_SAAS = "managed_saas"
+    VPC = "vpc_private_cloud"
+    HYBRID = "hybrid_cloud"
+    ON_PREM = "on_prem_edge"
+
+class KnowledgeStrategy(str, Enum):
+    PRETRAINED = "pretrained_only"
+    RAG_VECTOR = "rag_vector_search"
+    RAG_GRAPH = "rag_knowledge_graph"
+    HYBRID = "hybrid_rag"
+
+class GuardrailLevel(str, Enum):
+    BASIC = "basic_filtering"
+    MODERATE = "moderate_safety"
+    STRICT = "strict_enterprise"
+    COMPLIANCE = "compliance_regulated"
+
 # ============================================================================
 # 3. PYDANTIC MODELS
 # ============================================================================
@@ -476,14 +541,37 @@ class ChatbotProposal(UniversalProposalCore):
     expected_queries_per_day: int = Field(default=100)
     requires_multilingual: bool = Field(default=False)
     languages_required: List[str] = Field(default_factory=list)
-    existing_knowledge_base: bool = Field(default=False)
-    knowledge_sources: List[str] = Field(default_factory=list)
-    requires_human_handoff: bool = Field(default=True)
     
-    # New Deep Dive Fields
+    # Restored Legacy Fields
     response_type: str = Field(default="Generated")
+    requires_human_handoff: bool = Field(default=True)
     document_formats: Optional[List[str]] = Field(default=None)
     traceability_required: bool = Field(default=True)
+
+    # 1. Channels & Experience
+    channel_strategy: ChannelStrategy
+    
+    # 2. Security & Access
+    auth_method: AuthMethod
+    
+    # 3. Intelligence Topology
+    orchestration_type: OrchestrationType
+    
+    # 4. Model Hosting Strategy
+    hosting_strategy: HostingStrategy
+    hosting_provider_detail: Optional[str] = Field(default=None)
+    
+    # 5. Knowledge & RAG
+    knowledge_strategy: KnowledgeStrategy
+    knowledge_sources: List[str] = Field(default_factory=list)
+    knowledge_update_freq: Optional[str] = Field(default="Daily")
+    
+    # 6. Observability & Governance
+    guardrail_level: GuardrailLevel
+    analytics_depth: str = Field(default="Standard")
+    
+    # 7. Delivery Context
+    deployment_phase: str = Field(default="POC")
 
 # ============================================================================
 # 4. HELPER FUNCTIONS
@@ -687,39 +775,83 @@ with tab_visual:
         handle_submission(VisualInspectionProposal, data, "Visual Inspection")
 
 # === TAB 3: CHATBOT ===
+# Domain & Architecture Refactor
 with tab_chat:
     st.header("Chatbot Config")
     with st.form("form_chatbot"):
-        with st.expander("Strategic & Technical Core", expanded=True):
+        # 1. Strategic Context (Universal)
+        with st.expander("Strategic Context", expanded=True):
             core_data = render_universal_core("chat")
-            
+        
+        # 2. Domain Details (Capabilities)
         with st.expander("Domain Details", expanded=True):
             st.subheader("Bot Scope")
-            cb_type = st.selectbox("Chatbot Type *", format_enum_options(ChatbotType))
-            platforms = st.multiselect("Integration Platforms *", format_enum_options(IntegrationPlatform))
-            queries = st.number_input("Expected Queries/Day", 10, 50000, 100)
-            
-            st.subheader("Deep Dive")
             c1, c2 = st.columns(2)
-            with c1: 
-                resp_type = st.selectbox("Response Type", ["Generated", "Deterministic", "Hybrid"])
-                has_kb = st.checkbox("Existing Knowledge Base?")
-                kb_src = st.text_input("Knowledge Sources", "PDFs, SharePoint") if has_kb else ""
-            with c2:
-                # Conditional Document Formats
-                doc_fmt = None
-                if has_kb:
-                    doc_fmt_str = st.text_input("Document Formats", "PDF, Docx")
-                    doc_fmt = [x.strip() for x in doc_fmt_str.split(',')] if doc_fmt_str else []
-                trace = st.checkbox("Traceability Required", value=True)
+            with c1: cb_type = st.selectbox("Chatbot Type *", format_enum_options(ChatbotType))
+            with c2: queries = st.number_input("Expected Queries/Day", 10, 500000, 1000)
+            
+            platforms = st.multiselect("Integration Platforms *", format_enum_options(IntegrationPlatform))
             
             c3, c4 = st.columns(2)
-            with c3: multilingual = st.checkbox("Multilingual Support")
-            with c4: handoff = st.checkbox("Human Handoff", value=True)
+            with c3: 
+                multilingual = st.checkbox("Multilingual Support")
+                lang_str = st.text_input("Languages", "Spanish, French") if multilingual else ""
+            with c4:
+                handoff = st.checkbox("Human Handoff", value=True)
             
-            lang_str = ""
-            if multilingual:
-                lang_str = st.text_input("Languages", "Spanish, French")
+            resp_type = st.selectbox("Response Type", ["Generated", "Deterministic", "Hybrid"])
+
+        # 3. Architecture & Implementation (New Groups)
+        with st.expander("Domain & Architecture Details", expanded=True):
+            
+            # Group 1: Channels & Experience
+            st.markdown("#### 1. Channels & Experience")
+            chan_strat = st.selectbox("Channel Strategy", format_enum_options(ChannelStrategy), help="How are channels coordinated?")
+            
+            # Group 2: Security & Access
+            st.markdown("#### 2. Security & Access")
+            auth_meth = st.selectbox("Auth Method", format_enum_options(AuthMethod))
+
+            # Group 3: Intelligence Topology
+            st.markdown("#### 3. Intelligence Topology")
+            orch_type = st.selectbox("Orchestration Type", format_enum_options(OrchestrationType))
+
+            # Group 4: Model Hosting
+            st.markdown("#### 4. Model Hosting Strategy")
+            c_host1, c_host2 = st.columns(2)
+            with c_host1: host_strat = st.selectbox("Hosting Strategy", format_enum_options(HostingStrategy))
+            with c_host2:
+                # Conditional Cascading
+                host_detail = None
+                if host_strat == HostingStrategy.MANAGED_SAAS.value:
+                    host_detail = st.text_input("Preferred Provider", "OpenAI / Anthropic")
+                elif host_strat == HostingStrategy.ON_PREM.value:
+                    host_detail = st.text_input("Target Hardware", "NVIDIA Jetson / Local Server")
+            
+            # Group 5: Knowledge & RAG
+            st.markdown("#### 5. Knowledge & RAG")
+            c_know1, c_know2 = st.columns(2)
+            with c_know1: know_strat = st.selectbox("Knowledge Strategy", format_enum_options(KnowledgeStrategy))
+            with c_know2:
+                know_src_str = ""
+                doc_fmt_str = ""
+                know_freq = "Daily"
+                if know_strat != KnowledgeStrategy.PRETRAINED.value:
+                    know_src_str = st.text_input("Knowledge Sources", "SharePoint, Confluence, PDFs")
+                    doc_fmt_str = st.text_input("Document Formats", "PDF, Docx")
+                    know_freq = st.selectbox("Update Frequency", ["Real-time", "Hourly", "Daily", "Weekly"])
+            
+            # Group 6: Observability & Governance
+            st.markdown("#### 6. Observability & Governance")
+            c_obs1, c_obs2 = st.columns(2)
+            with c_obs1: 
+                guard_level = st.selectbox("Guardrail Level", format_enum_options(GuardrailLevel))
+                trace = st.checkbox("Traceability Required", value=True)
+            with c_obs2: analytics = st.selectbox("Analytics Depth", ["Basic", "Standard", "Advanced (Conversational Intelligence)"], index=1)
+            
+            # Group 7: Delivery Context
+            st.markdown("#### 7. Delivery Context")
+            del_phase = st.selectbox("Deployment Phase", ["POC", "MVP", "Production Pilot", "Scale Rollout"])
 
         with st.expander("Commercials", expanded=False):
             c1, c2 = st.columns(2)
@@ -731,16 +863,27 @@ with tab_chat:
 
     if submitted_chat:
         languages = [x.strip() for x in lang_str.split(',')] if (multilingual and lang_str) else []
-        kb_sources = [x.strip() for x in kb_src.split(',')] if (has_kb and kb_src) else []
+        knowledge_srcs = [x.strip() for x in know_src_str.split(',')] if (know_strat != "pretrained_only" and know_src_str) else []
+        doc_formats = [x.strip() for x in doc_fmt_str.split(',')] if (know_strat != "pretrained_only" and doc_fmt_str) else []
+
         data = {
             **core_data,
             "client_name": global_client, "vendor_name": global_vendor, "industry": global_industry,
             "chatbot_type": cb_type, "integration_platforms": platforms,
-            "expected_queries_per_day": queries, "response_type": resp_type,
-            "existing_knowledge_base": has_kb, "knowledge_sources": kb_sources,
-            "document_formats": doc_fmt, "traceability_required": trace,
+            "expected_queries_per_day": queries, 
             "requires_multilingual": multilingual, "languages_required": languages,
             "requires_human_handoff": handoff,
+            "response_type": resp_type,
+            
+            # New Architecture Fields
+            "channel_strategy": chan_strat,
+            "auth_method": auth_meth,
+            "orchestration_type": orch_type,
+            "hosting_strategy": host_strat, "hosting_provider_detail": host_detail,
+            "knowledge_strategy": know_strat, "knowledge_sources": knowledge_srcs, 
+            "knowledge_update_freq": know_freq, "document_formats": doc_formats,
+            "guardrail_level": guard_level, "analytics_depth": analytics, "traceability_required": trace,
+            "deployment_phase": del_phase,
             "delivery_timeline": timeline, "estimated_budget_usd": budget, "key_assumptions": assumptions
         }
         handle_submission(ChatbotProposal, data, "Chatbot")

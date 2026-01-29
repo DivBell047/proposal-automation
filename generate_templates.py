@@ -9,7 +9,7 @@ from pptx.util import Inches, Pt
 if not os.path.exists("templates"):
     os.makedirs("templates")
 
-def create_base_template(filename, title_pattern, specific_placeholders):
+def create_base_template(filename, title_pattern, specific_placeholders, architecture_details=None):
     prs = Presentation()
 
     # --- SLIDE 1: Title Slide (UPDATED) ---
@@ -33,7 +33,18 @@ def create_base_template(filename, title_pattern, specific_placeholders):
         p.text = ph
         p.level = 0
 
-    # --- SLIDE 4: Commercials ---
+    # --- SLIDE 4 (Optional): Architecture & Implementation ---
+    if architecture_details:
+        slide = prs.slides.add_slide(prs.slide_layouts[1])
+        slide.shapes.title.text = "Solution Architecture"
+        tf = slide.placeholders[1].text_frame
+        tf.text = "Architectural Patterns:"
+        for detail in architecture_details:
+            p = tf.add_paragraph()
+            p.text = detail
+            p.level = 0
+
+    # --- SLIDE 5: Commercials ---
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = "Commercials & Timeline"
     tf = slide.placeholders[1].text_frame
@@ -48,22 +59,22 @@ def create_base_template(filename, title_pattern, specific_placeholders):
     p = tf.add_paragraph()
     p.text = "Cloud: {{CLOUD}}"
 
-    # --- SLIDE 5: Problem & Outcome ---
+    # --- SLIDE 6: Problem & Outcome ---
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = "Problem Statement & Outcome"
     slide.placeholders[1].text = "{{PROBLEM_NARRATIVE}}"
 
-    # --- SLIDE 6: Data Reality ---
+    # --- SLIDE 7: Data Reality ---
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = "Data Reality"
     slide.placeholders[1].text = "{{DATA_NARRATIVE}}"
 
-    # --- SLIDE 7: Intelligence Layer ---
+    # --- SLIDE 8: Intelligence Layer ---
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = "Intelligence Layer"
     slide.placeholders[1].text = "{{INTELLIGENCE_NARRATIVE}}"
 
-    # --- SLIDE 8: Execution & Deployment ---
+    # --- SLIDE 9: Execution & Deployment ---
     slide = prs.slides.add_slide(prs.slide_layouts[1])
     slide.shapes.title.text = "Execution Strategy"
     slide.placeholders[1].text = "{{EXECUTION_NARRATIVE}}"
@@ -80,4 +91,14 @@ create_base_template("visual_inspection.pptx", "Visual Inspection System",
     ["Type: {{INSPECTION_TYPE}}", "Defects: {{DEFECTS}}", "Accuracy: {{ACCURACY}}"])
 
 create_base_template("chatbot.pptx", "AI Chatbot Solution", 
-    ["Type: {{CHATBOT_TYPE}}", "Platforms: {{PLATFORMS}}", "Volume: {{QUERIES}}"])
+    ["Type: {{CHATBOT_TYPE}}", "Platforms: {{PLATFORMS}}", "Volume: {{QUERIES}}"],
+    architecture_details=[
+        "Channels: {{CHANNEL_STRATEGY}}",
+        "Auth Method: {{AUTH_METHOD}}",
+        "Orchestration: {{ORCHESTRATION}}",
+        "Hosting: {{HOSTING_STRATEGY}}",
+        "Knowledge: {{KNOWLEDGE_STRATEGY}}",
+        "Guardrails: {{GUARDRAILS}}",
+        "Phase: {{DEPLOYMENT_PHASE}}"
+    ]
+)
