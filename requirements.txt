@@ -2,3 +2,4 @@ streamlit
 python-pptx
 pydantic
 groq
+pandas
