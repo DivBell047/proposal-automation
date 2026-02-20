@@ -1,0 +1,7 @@
+fastapi
+python-multipart
+python-pptx
+pydantic
+mangum
+# uvicorn intentionally excluded — not needed on Lambda (Mangum/ASGI handles invocation)
+# boto3 intentionally excluded — pre-installed in Lambda Python 3.11 runtime

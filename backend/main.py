@@ -19,12 +19,18 @@ from src.slide_builder import create_presentation
 
 app = FastAPI(title="Proposal Automation API")
 
-# ── CORS: allow React dev server + any S3 static URL ────────────────────────
+# ── CORS: driven by env var so the same code works locally and on Lambda ──────
+# Local dev:  ALLOWED_ORIGINS not set → defaults to localhost:5173
+# Lambda:     set ALLOWED_ORIGINS=https://your-s3-bucket-url.com in Lambda env vars
+# On Lambda Function URL → set CORS to DISABLED (FastAPI is the single source of truth)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "*"],   # tighten for prod
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],   # required for browser to read filename on download
 )
 
 
@@ -100,6 +106,7 @@ def health():
 # ─── LOCAL RUN ────────────────────────────────────────────────────────────────
 # Run: uvicorn backend.main:app --reload --port 8000
 
-# ─── LAMBDA HANDLER (uncomment when deploying to AWS) ─────────────────────────
-# from mangum import Mangum
-# handler = Mangum(app)
+# ─── LAMBDA HANDLER ───────────────────────────────────────────────────────────
+# Mangum wraps FastAPI as a Lambda handler. Ignored by uvicorn locally.
+from mangum import Mangum
+handler = Mangum(app)
