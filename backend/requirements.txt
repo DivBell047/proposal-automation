@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+boto3
+python-pptx
+pydantic
+
+# Uncomment for Lambda deployment:
+# mangum

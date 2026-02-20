@@ -1,25 +1,46 @@
-from groq import Groq
+import boto3
+import json
+import os
 
-def call_llm_for_text(prompt: str, api_key: str) -> str:
+# Bedrock model to use — swap this string to change models
+BEDROCK_MODEL_ID = "meta.llama3-8b-instruct-v1:0"
+BEDROCK_REGION   = "ap-south-1"   # Mumbai — change if using a different region
+
+def call_llm_for_text(prompt: str, api_key: str = None) -> str:
     """
-    Helper to call Groq API (using Llama 3.3).
+    Calls AWS Bedrock (Llama 3 8B) to generate text.
+    - Locally: authenticates via ~/.aws/credentials (run `aws configure`)
+    - On Lambda: authenticates via the IAM execution role automatically
     """
-    if not api_key:
-        return "AI_ERROR_NO_KEY"
-        
     try:
-        client = Groq(api_key=api_key)
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a senior solution architect and proposal writer. You write concise, high-impact business prose."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=800,
+        bedrock = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+
+        body = json.dumps({
+            "prompt": (
+                "<|begin_of_text|>"
+                "<|start_header_id|>system<|end_header_id|>\n"
+                "You are a senior solution architect and proposal writer. "
+                "You write concise, high-impact business prose.\n"
+                "<|eot_id|>"
+                "<|start_header_id|>user<|end_header_id|>\n"
+                f"{prompt}\n"
+                "<|eot_id|>"
+                "<|start_header_id|>assistant<|end_header_id|>\n"
+            ),
+            "max_gen_len": 800,
+            "temperature": 0.7,
+            "top_p": 0.9,
+        })
+
+        response = bedrock.invoke_model(
+            modelId=BEDROCK_MODEL_ID,
+            body=body,
+            contentType="application/json",
+            accept="application/json",
         )
-        return completion.choices[0].message.content.strip()
-        
+        result = json.loads(response["body"].read())
+        return result.get("generation", "").strip()
+
     except Exception as e:
         return f"[AI ERROR: {str(e)}]"
     

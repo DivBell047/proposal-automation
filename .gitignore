@@ -2,4 +2,11 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
-.streamlit
+.streamlit/
+
+# Generated outputs
+uploads/
+*.pptx
+
+# Backend cache
+backend/__pycache__/
